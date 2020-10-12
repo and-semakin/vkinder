@@ -1,0 +1,30 @@
+default_stages: [commit]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-ast
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: end-of-file-fixer
+  - repo: https://gitlab.com/pycqa/flake8
+    rev: 3.8.4
+    hooks:
+      - id: flake8
+  - repo: https://github.com/psf/black
+    rev: stable
+    hooks:
+      - id: black
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.6.3
+    hooks:
+      - id: isort
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: pipenv run mypy .
+        language: system
+        types: [python]
+        pass_filenames: false
