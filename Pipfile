@@ -9,6 +9,7 @@ black = "==20.8b1"
 flake8 = "*"
 mypy = "*"
 pre-commit = "*"
+pytest = "*"
 
 [packages]
 vk-api = "*"
