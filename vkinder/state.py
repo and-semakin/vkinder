@@ -8,6 +8,8 @@ from vk_api.longpoll import Event
 
 from vkinder.user import User
 
+TOTAL_STEPS = 4
+
 
 def write_msg(session: VkApi, user_id, message, attachment=None, keyboard=None) -> None:
     """Отправка сообщения пользователю"""
@@ -104,10 +106,10 @@ class HelloErrorState(HelloState):
 
 class SelectCountryState(State):
     text = (
-        "Отлично! Для начала нужно указать страну, в которой ты хочешь "
+        "Шаг 1 из %s. Отлично! Для начала нужно указать страну, в которой ты хочешь "
         "найти себе пару. Если нужной страны нет на клавиатуре ниже, "
         "то просто отправь мне её название."
-    )
+    ) % (TOTAL_STEPS,)
 
     @classmethod
     def enter(
@@ -183,9 +185,9 @@ class SelectCountryErrorState(SelectCountryState):
 
 class SelectCityState(State):
     text = (
-        "Введи название города, в котором ты хочешь производить поиск. "
+        "Шаг 2 из %s. Введи название города, в котором ты хочешь производить поиск. "
         "Если для твоего города нет кнопки, то введи название текстом."
-    )
+    ) % (TOTAL_STEPS,)
 
     @classmethod
     def enter(
@@ -268,7 +270,9 @@ class SelectCityErrorState(SelectCityState):
 
 
 class SelectSexState(State):
-    text = "Отлично! Теперь выбери пол второй половинки, которую ты ищешь."
+    text = (
+        "Шаг 3 из %s. Отлично! Теперь выбери пол второй половинки, которую ты ищешь."
+    ) % (TOTAL_STEPS,)
 
     @classmethod
     def enter(
@@ -326,12 +330,12 @@ class SelectSexErrorState(SelectSexState):
 
 class SelectAgeState(State):
     text = (
-        "Давай выберем диапазон возрастов, который тебя интересует. "
+        "Шаг 4 из %s. Давай выберем диапазон возрастов, который тебя интересует. "
         "Можешь выбрать из предложенных на клавиатуре вариантов, либо "
         "отправить свой диапазон возрастов в виде двух чисел, разделённых "
         "минусом, например: 20-21. Если интересует конкретный возраст, то "
         "можно отправить одно число, например: 42."
-    )
+    ) % (TOTAL_STEPS,)
 
     @classmethod
     def enter(
