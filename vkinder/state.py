@@ -268,21 +268,60 @@ class SelectCityErrorState(SelectCityState):
 
 
 class SelectSexState(State):
+    text = "Отлично! Теперь выбери пол второй половинки, которую ты ищешь."
+
     @classmethod
     def enter(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> None:
+        keyboard = VkKeyboard(one_time=True)
+
+        keyboard.add_button("Мужской", color=VkKeyboardColor.PRIMARY)
+        keyboard.add_button("Женский", color=VkKeyboardColor.PRIMARY)
+        keyboard.add_line()
+        keyboard.add_button("Любой", color=VkKeyboardColor.SECONDARY)
+        keyboard.add_line()
+
+        keyboard.add_button("Назад", color=VkKeyboardColor.SECONDARY)
+        keyboard.add_button("Отмена", color=VkKeyboardColor.NEGATIVE)
+
         write_msg(
-            group_session,
-            event.user_id,
-            "Тут ничего нет. Отправь любое сообщение, чтобы вернуться в начало.",
+            group_session, event.user_id, cls.text, keyboard=keyboard.get_keyboard()
         )
 
     @classmethod
     def leave(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> str:
-        return "hello"
+        if event.text == "Отмена":
+            return "hello"
+        if event.text == "Назад":
+            return "select_city"
+
+        selected_sex: str
+        if event.text == "Мужской":
+            user.data["sex"] = 1
+            selected_sex = "мужчин"
+        elif event.text == "Женский":
+            user.data["sex"] = 2
+            selected_sex = "женщин"
+        elif event.text == "Любой":
+            user.data["sex"] = 0
+            selected_sex = "партнёров любого пола"
+        else:
+            return "select_sex_error"
+
+        write_msg(
+            group_session, event.user_id, f"Отлично! Будем искать {selected_sex}!"
+        )
+        return "select_age"
+
+
+class SelectSexErrorState(SelectSexState):
+    text = (
+        "Хм, не уверен, что в ВК найдутся люди такого пола. "
+        "Лучше используй кнопки, чтобы выбрать пол искомого партнёра."
+    )
 
 
 class SelectAgeState(State):
@@ -290,13 +329,13 @@ class SelectAgeState(State):
     def enter(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> None:
-        pass
+        write_msg(group_session, event.user_id, "Здесь ничего нет! Это конец!")
 
     @classmethod
     def leave(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> str:
-        pass
+        return "hello"
 
 
 class ListMatchesState(State):
@@ -325,6 +364,7 @@ states = {
     "select_city_error": SelectCityErrorState,
     # выбор пола
     "select_sex": SelectSexState,
+    "select_sex_error": SelectSexErrorState,
     # выбор возраста
     "select_age": SelectAgeState,
     # просмотр результатов поиска
