@@ -4,7 +4,7 @@ import vk_api
 from vk_api.longpoll import VkEventType, VkLongPoll
 
 from vkinder.config import config
-from vkinder.state import states, write_msg
+from vkinder.state import INITIAL_STATE, states, write_msg
 from vkinder.user import User
 
 users: MutableMapping[str, User] = {}
@@ -21,7 +21,7 @@ def main():
             continue
 
         if event.user_id not in users:
-            user = User(event.user_id, "hello", {})
+            user = User(event.user_id, INITIAL_STATE, {})
             users[event.user_id] = user
             states[user.state].enter(user, session, group_session, event)
             continue

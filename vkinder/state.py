@@ -8,6 +8,7 @@ from vk_api.longpoll import Event
 
 from vkinder.user import User
 
+INITIAL_STATE = "hello"
 TOTAL_STEPS = 4
 
 
@@ -104,6 +105,14 @@ class HelloErrorState(HelloState):
     )
 
 
+class HelloAgainState(HelloState):
+    text = (
+        "Ты находишься в главном меню, {first_name}. Начнём новый поиск? "
+        "Если ты уже искал людей раньше, то можно просмотреть результаты "
+        "предыдущих поисков."
+    )
+
+
 class SelectCountryState(State):
     text = (
         "Шаг 1 из %s. Отлично! Для начала нужно указать страну, в которой ты хочешь "
@@ -153,7 +162,7 @@ class SelectCountryState(State):
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> str:
         if event.text == "Отмена":
-            return "hello"
+            return "hello_again"
 
         country_title_query = event.text.lower()
 
@@ -236,7 +245,7 @@ class SelectCityState(State):
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> str:
         if event.text == "Отмена":
-            return "hello"
+            return "hello_again"
         if event.text == "Назад":
             return "select_country"
 
@@ -298,7 +307,7 @@ class SelectSexState(State):
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> str:
         if event.text == "Отмена":
-            return "hello"
+            return "hello_again"
         if event.text == "Назад":
             return "select_city"
 
@@ -365,7 +374,7 @@ class SelectAgeState(State):
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> str:
         if event.text == "Отмена":
-            return "hello"
+            return "hello_again"
         if event.text == "Назад":
             return "select_sex"
 
@@ -418,13 +427,14 @@ class ListMatchesState(State):
     def leave(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> str:
-        return "hello"
+        return "hello_again"
 
 
 states = {
     # приветствие
     "hello": HelloState,
     "hello_error": HelloErrorState,
+    "hello_again": HelloAgainState,
     # выбор страны
     "select_country": SelectCountryState,
     "select_country_error": SelectCountryErrorState,
