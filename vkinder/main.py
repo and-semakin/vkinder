@@ -21,7 +21,7 @@ def main():
             continue
 
         try:
-            user = storage.get(User.type, event.user_id)
+            user = storage.get(User, event.user_id)
         except ItemNotFoundInStorageError:
             user_info = session.method(
                 "users.get", {"user_ids": event.user_id, "fields": "country,city"}
