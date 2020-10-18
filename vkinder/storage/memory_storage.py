@@ -1,5 +1,5 @@
 import uuid
-from typing import Callable, Dict, List
+from typing import Any, Callable, Dict, List, Type, TypeVar, cast
 
 from vkinder.storage.base import (
     BaseStorage,
@@ -8,6 +8,8 @@ from vkinder.storage.base import (
     StorageItem,
 )
 
+T = TypeVar("T", bound=StorageItem)
+
 
 class MemoryStorage(BaseStorage):
     _data: Dict[str, Dict[uuid.UUID, StorageItem]]
@@ -15,11 +17,11 @@ class MemoryStorage(BaseStorage):
     def __init__(self) -> None:
         self._data = {}
 
-    def get(self, type: str, id: uuid.UUID) -> StorageItem:
-        table = self._data.setdefault(type, {})
+    def get(self, type: Type[T], id: uuid.UUID) -> T:
+        table = self._data.setdefault(type.type, {})
         if id not in table:
             raise ItemNotFoundInStorageError()
-        return table[id]
+        return cast(T, table[id])
 
     def save(self, item: StorageItem, overwrite: bool = True) -> None:
         table = self._data.setdefault(item.type, {})
@@ -27,9 +29,7 @@ class MemoryStorage(BaseStorage):
             raise ItemAlreadyExistsInStorageError()
         table[item.id] = item
 
-    def find(
-        self, type: str, where: Callable[[StorageItem], bool]
-    ) -> List[StorageItem]:
-        table = self._data.setdefault(type, {})
+    def find(self, type: Type[T], where: Callable[[T], bool]) -> List[T]:
+        table = cast(Dict[Any, T], self._data.setdefault(type.type, {}))
         matching = [item for item in table.values() if where(item)]
         return matching

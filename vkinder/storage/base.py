@@ -1,5 +1,5 @@
 import abc
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Type, TypeVar
 
 
 class StorageItem(abc.ABC):
@@ -15,6 +15,9 @@ class StorageItem(abc.ABC):
         raise NotImplementedError()
 
 
+T = TypeVar("T", bound=StorageItem)
+
+
 class ItemNotFoundInStorageError(Exception):
     """Item not found in storage."""
 
@@ -25,7 +28,7 @@ class ItemAlreadyExistsInStorageError(Exception):
 
 class BaseStorage(abc.ABC):
     @abc.abstractmethod
-    def get(self, type: str, id: Any) -> StorageItem:
+    def get(self, type: Type[T], id: Any) -> T:
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -33,7 +36,5 @@ class BaseStorage(abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def find(
-        self, type: str, where: Callable[[StorageItem], bool]
-    ) -> List[StorageItem]:
+    def find(self, type: Type[T], where: Callable[[T], bool]) -> List[T]:
         raise NotImplementedError()

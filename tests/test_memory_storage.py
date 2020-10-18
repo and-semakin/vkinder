@@ -33,13 +33,13 @@ class TestGet:
         item = Apple(uuid=uuid4(), color="red", weight=0.2)
         storage._data[Apple.type][item.id] = item
 
-        found_item = storage.get(Apple.type, item.id)
+        found_item = storage.get(Apple, item.id)
 
         assert item.id == found_item.id
 
     def test_raises_if_item_not_found(self, storage: MemoryStorage) -> None:
         with pytest.raises(ItemNotFoundInStorageError):
-            storage.get(Apple.type, uuid4())
+            storage.get(Apple, uuid4())
 
 
 class TestSave:
@@ -64,7 +64,7 @@ class TestSave:
         another_item = Apple(uuid=item.id, color="green", weight=0.3)
         storage.save(another_item)
 
-        found_item = storage.get(Apple.type, item.id)
+        found_item = storage.get(Apple, item.id)
         assert another_item.id == found_item.id
         assert another_item.color == found_item.color
         assert another_item.weight == found_item.weight
@@ -81,7 +81,7 @@ class TestSave:
         with pytest.raises(ItemAlreadyExistsInStorageError):
             storage.save(another_item, overwrite=False)
 
-        found_item = storage.get(Apple.type, item.id)
+        found_item = storage.get(Apple, item.id)
         assert found_item.id == item.id
         assert found_item.color == item.color
         assert found_item.weight == item.weight
@@ -89,7 +89,7 @@ class TestSave:
 
 class TestFind:
     def test_finds_nothing(self, storage: MemoryStorage) -> None:
-        found = storage.find(Apple.type, lambda _: True)
+        found = storage.find(Apple, lambda _: True)
         assert isinstance(found, list)
         assert not found
 
@@ -98,7 +98,7 @@ class TestFind:
         storage.save(Apple(uuid=uuid4(), color="red", weight=0.3))
         storage.save(Apple(uuid=uuid4(), color="green", weight=0.4))
 
-        red_apples = storage.find(Apple.type, lambda apple: apple.color == "red")
+        red_apples = storage.find(Apple, lambda apple: apple.color == "red")
         assert len(red_apples) == 2
         # without duplicates
         assert len(set(apple.uuid for apple in red_apples)) == 2

@@ -474,7 +474,7 @@ class SelectAgeState(State):
             person for person in search_results if not person["is_closed"]
         ]
 
-        search_id = str(uuid.uuid4())
+        search_id = uuid.uuid4()
         search = Search(
             uuid=search_id,
             user_id=event.user_id,
@@ -520,7 +520,7 @@ class ListMatchesState(State):
 
         search_id = user.current_search
 
-        matches = storage.find(Match.type, lambda match: match.search_id == search_id)
+        matches = storage.find(Match, lambda match: match.search_id == search_id)
 
         item_index = user.current_search_item
         assert 0 <= item_index < len(matches)
@@ -580,7 +580,7 @@ class ListMatchesState(State):
 
         search_id = user.current_search
 
-        matches = storage.find(Match.type, lambda match: match.search_id == search_id)
+        matches = storage.find(Match, lambda match: match.search_id == search_id)
 
         item_index = user.current_search_item
         assert 0 <= item_index < len(matches)
