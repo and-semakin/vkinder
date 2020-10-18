@@ -37,6 +37,7 @@ def main():
                     f"Ассоциированные данные: {user.data}",
                 ),
             )
+            states[user.state].enter(user, session, group_session, event)
             continue
 
         new_state = states[user.state].leave(user, session, group_session, event)
