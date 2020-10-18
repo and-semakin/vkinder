@@ -190,6 +190,7 @@ class SelectCountryState(State):
 
         user.country_id = country_id
         write_msg(group_session, event.user_id, f"Выбрана страна: {country_title}")
+        storage.save(user)
         return "select_city"
 
 
@@ -282,6 +283,7 @@ class SelectCityState(State):
 
         user.city_id = city_id
         write_msg(group_session, event.user_id, f"Выбран город: {city_title}")
+        storage.save(user)
         return "select_sex"
 
 
@@ -353,6 +355,7 @@ class SelectSexState(State):
         write_msg(
             group_session, event.user_id, f"Отлично! Будем искать {selected_sex}!"
         )
+        storage.save(user)
         return "select_age"
 
 
@@ -495,6 +498,7 @@ class SelectAgeState(State):
 
         user.current_search = search_id
         user.current_search_item = 0
+        storage.save(user)
         return "list_matches"
 
 
@@ -573,6 +577,7 @@ class ListMatchesState(State):
         if event.text == "Отмена":
             user.current_search = None
             user.current_search_item = None
+            storage.save(user)
             return "hello_again"
 
         assert user.current_search
@@ -596,6 +601,7 @@ class ListMatchesState(State):
 
         user.current_search_item += 1
 
+        storage.save(user)
         return "list_matches"
 
 
