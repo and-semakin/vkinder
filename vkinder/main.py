@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import vk_api
 from vk_api.longpoll import VkEventType, VkLongPoll
 
@@ -5,9 +7,9 @@ from vkinder.config import config
 from vkinder.models import User
 from vkinder.state import INITIAL_STATE, states, write_msg
 from vkinder.storage.base import ItemNotFoundInStorageError
-from vkinder.storage.memory_storage import MemoryStorage
+from vkinder.storage.memory_storage import PersistentStorage
 
-storage = MemoryStorage()
+storage = PersistentStorage(Path(__file__).parent.resolve() / "data.pickle")
 
 
 def main():
@@ -50,6 +52,7 @@ def main():
             storage.save(user)
 
             states[user.state].enter(storage, user, session, group_session, event)
+            storage.persist()
             continue
 
         if event.text == "/state":
@@ -69,6 +72,7 @@ def main():
         )
         user.state = new_state
         states[new_state].enter(storage, user, session, group_session, event)
+        storage.persist()
 
 
 if __name__ == "__main__":
