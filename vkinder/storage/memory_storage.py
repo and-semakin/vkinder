@@ -1,5 +1,5 @@
 import uuid
-from typing import Dict
+from typing import Callable, Dict, List
 
 from vkinder.storage.base import (
     BaseStorage,
@@ -26,3 +26,10 @@ class MemoryStorage(BaseStorage):
         if item.id in table and not overwrite:
             raise ItemAlreadyExistsInStorageError()
         table[item.id] = item
+
+    def find(
+        self, type: str, where: Callable[[StorageItem], bool]
+    ) -> List[StorageItem]:
+        table = self._data.setdefault(type, {})
+        matching = [item for item in table.values() if where(item)]
+        return matching

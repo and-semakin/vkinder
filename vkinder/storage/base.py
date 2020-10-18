@@ -1,22 +1,18 @@
 import abc
-import uuid
-from typing import Any, Dict
+from typing import Any, Callable, List
 
 
 class StorageItem(abc.ABC):
     type: str
-    _data: Dict[str, Any]
 
     def __init__(self, **kwargs) -> None:
-        self._data = kwargs
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     @property
     @abc.abstractmethod
-    def id(self) -> uuid.UUID:
+    def id(self) -> Any:
         raise NotImplementedError()
-
-    def __getattr__(self, item: str) -> Any:
-        return self._data[item]
 
 
 class ItemNotFoundInStorageError(Exception):
@@ -29,9 +25,15 @@ class ItemAlreadyExistsInStorageError(Exception):
 
 class BaseStorage(abc.ABC):
     @abc.abstractmethod
-    def get(self, type: str, id: uuid.UUID) -> StorageItem:
+    def get(self, type: str, id: Any) -> StorageItem:
         raise NotImplementedError()
 
     @abc.abstractmethod
     def save(self, item: StorageItem, overwrite: bool = True) -> None:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def find(
+        self, type: str, where: Callable[[StorageItem], bool]
+    ) -> List[StorageItem]:
         raise NotImplementedError()
