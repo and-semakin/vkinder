@@ -325,17 +325,82 @@ class SelectSexErrorState(SelectSexState):
 
 
 class SelectAgeState(State):
+    text = (
+        "Давай выберем диапазон возрастов, который тебя интересует. "
+        "Можешь выбрать из предложенных на клавиатуре вариантов, либо "
+        "отправить свой диапазон возрастов в виде двух чисел, разделённых "
+        "минусом, например: 20-21. Если интересует конкретный возраст, то "
+        "можно отправить одно число, например: 42."
+    )
+
     @classmethod
     def enter(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> None:
-        write_msg(group_session, event.user_id, "Здесь ничего нет! Это конец!")
+        keyboard = VkKeyboard(one_time=True)
+
+        keyboard.add_button("16-20")
+        keyboard.add_button("20-25")
+        keyboard.add_line()
+        keyboard.add_button("25-30")
+        keyboard.add_button("30-35")
+        keyboard.add_line()
+        keyboard.add_button("35-40")
+        keyboard.add_button("40-50")
+        keyboard.add_line()
+
+        keyboard.add_button("Назад", color=VkKeyboardColor.SECONDARY)
+        keyboard.add_button("Отмена", color=VkKeyboardColor.NEGATIVE)
+
+        write_msg(
+            group_session, event.user_id, cls.text, keyboard=keyboard.get_keyboard()
+        )
 
     @classmethod
     def leave(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> str:
-        return "hello"
+        if event.text == "Отмена":
+            return "hello"
+        if event.text == "Назад":
+            return "select_sex"
+
+        msg: str = event.text.lower().strip()
+
+        age_from: int
+        age_to: int
+
+        if "-" in msg:
+            try:
+                from_, to = msg.split("-")
+                age_from = int(from_.strip())
+                age_to = int(to.strip())
+            except ValueError:
+                return "select_age_error"
+        else:
+            try:
+                age_from = age_to = int(msg)
+            except ValueError:
+                return "select_age_error"
+
+        user.data["age_from"] = age_from
+        user.data["age_to"] = age_to
+        write_msg(
+            group_session,
+            event.user_id,
+            (
+                f"Выбран возрастной диапазон: {age_from}-{age_to} лет. "
+                "Начинаем поиск!"
+            ),
+        )
+        return "list_matches"
+
+
+class SelectAgeErrorState(SelectAgeState):
+    text = (
+        "Не могу распарсить присланный тобой диапазон возрастов. "
+        "Примеры валидных диапазонов: 18-30, 18-18, 18. Попробуй ещё раз!"
+    )
 
 
 class ListMatchesState(State):
@@ -343,13 +408,13 @@ class ListMatchesState(State):
     def enter(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> None:
-        pass
+        write_msg(group_session, event.user_id, "Поиск... (на самом деле нет)")
 
     @classmethod
     def leave(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> str:
-        pass
+        return "hello"
 
 
 states = {
@@ -367,6 +432,7 @@ states = {
     "select_sex_error": SelectSexErrorState,
     # выбор возраста
     "select_age": SelectAgeState,
+    "select_age_error": SelectAgeErrorState,
     # просмотр результатов поиска
     "list_matches": ListMatchesState,
 }
