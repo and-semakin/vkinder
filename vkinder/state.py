@@ -8,7 +8,8 @@ from vk_api import VkApi
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import Event
 
-from vkinder.user import User
+from vkinder.models import Match, Search, User
+from vkinder.storage.base import BaseStorage
 
 INITIAL_STATE = "hello"
 TOTAL_STEPS = 4
@@ -29,14 +30,24 @@ class State(abc.ABC):
     @classmethod
     @abc.abstractmethod
     def enter(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> None:
         raise NotImplementedError()
 
     @classmethod
     @abc.abstractmethod
     def leave(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> str:
         raise NotImplementedError()
 
@@ -52,46 +63,31 @@ class HelloState(State):
 
     @classmethod
     def enter(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> None:
-        user_info = session.method(
-            "users.get", {"user_ids": event.user_id, "fields": "country,city"}
-        )[0]
-        first_name = user_info["first_name"]
-        last_name = user_info["last_name"]
-
-        try:
-            country_id = user_info["country"]["id"]
-        except KeyError:
-            country_id = None
-
-        try:
-            city_id = user_info["city"]["id"]
-        except KeyError:
-            city_id = None
-
-        # update data if user changed his info
-        user.data = {
-            "first_name": first_name,
-            "last_name": last_name,
-            "country_id": country_id,
-            "city_id": city_id,
-            **user.data,
-        }
-
         keyboard = VkKeyboard(one_time=True)
         keyboard.add_button("Новый поиск", color=VkKeyboardColor.PRIMARY)
 
         write_msg(
             group_session,
             event.user_id,
-            cls.text.format(first_name=first_name),
+            cls.text.format(first_name=user.first_name),
             keyboard=keyboard.get_keyboard(),
         )
 
     @classmethod
     def leave(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> str:
         if event.text == "Новый поиск":
             return "select_country"
@@ -124,9 +120,14 @@ class SelectCountryState(State):
 
     @classmethod
     def enter(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> None:
-        country_id = user.data["country_id"]
+        country_id = user.country_id
 
         keyboard = VkKeyboard(one_time=True)
 
@@ -161,7 +162,12 @@ class SelectCountryState(State):
 
     @classmethod
     def leave(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> str:
         if event.text == "Отмена":
             return "hello_again"
@@ -182,7 +188,7 @@ class SelectCountryState(State):
         else:
             return "select_country_error"
 
-        user.data["country_id"] = country_id
+        user.country_id = country_id
         write_msg(group_session, event.user_id, f"Выбрана страна: {country_title}")
         return "select_city"
 
@@ -202,13 +208,17 @@ class SelectCityState(State):
 
     @classmethod
     def enter(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> None:
-        assert "country_id" in user.data
-        assert "city_id" in user.data
+        assert user.country_id
 
-        country_id = user.data["country_id"]
-        city_id = user.data["city_id"]
+        country_id = user.country_id
+        city_id = user.city_id
 
         keyboard = VkKeyboard(one_time=True)
 
@@ -244,15 +254,19 @@ class SelectCityState(State):
 
     @classmethod
     def leave(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> str:
         if event.text == "Отмена":
             return "hello_again"
         if event.text == "Назад":
             return "select_country"
 
-        assert "country_id" in user.data
-        country_id = user.data["country_id"]
+        country_id = user.country_id
 
         found_cities = session.method(
             "database.getCities",
@@ -266,7 +280,7 @@ class SelectCityState(State):
         city_title = city["title"]
         city_id = city["id"]
 
-        user.data["city_id"] = city_id
+        user.city_id = city_id
         write_msg(group_session, event.user_id, f"Выбран город: {city_title}")
         return "select_sex"
 
@@ -287,7 +301,12 @@ class SelectSexState(State):
 
     @classmethod
     def enter(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> None:
         keyboard = VkKeyboard(one_time=True)
 
@@ -306,7 +325,12 @@ class SelectSexState(State):
 
     @classmethod
     def leave(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> str:
         if event.text == "Отмена":
             return "hello_again"
@@ -315,13 +339,13 @@ class SelectSexState(State):
 
         selected_sex: str
         if event.text == "Мужской":
-            user.data["sex"] = 2
+            user.sex = 2
             selected_sex = "мужчин"
         elif event.text == "Женский":
-            user.data["sex"] = 1
+            user.sex = 1
             selected_sex = "женщин"
         elif event.text == "Любой":
-            user.data["sex"] = 0
+            user.sex = 0
             selected_sex = "партнёров любого пола"
         else:
             return "select_sex_error"
@@ -350,7 +374,12 @@ class SelectAgeState(State):
 
     @classmethod
     def enter(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> None:
         keyboard = VkKeyboard(one_time=True)
 
@@ -373,7 +402,12 @@ class SelectAgeState(State):
 
     @classmethod
     def leave(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> str:
         if event.text == "Отмена":
             return "hello_again"
@@ -398,8 +432,8 @@ class SelectAgeState(State):
             except ValueError:
                 return "select_age_error"
 
-        user.data["age_from"] = age_from
-        user.data["age_to"] = age_to
+        user.age_from = age_from
+        user.age_to = age_to
         write_msg(
             group_session,
             event.user_id,
@@ -409,18 +443,18 @@ class SelectAgeState(State):
             ),
         )
 
-        assert "country_id" in user.data
-        assert "city_id" in user.data
-        assert "sex" in user.data
-        assert "age_from" in user.data
-        assert "age_to" in user.data
+        assert user.country_id
+        assert user.city_id
+        assert user.sex is not None
+        assert user.age_from
+        assert user.age_to
 
         search_params = {
-            "country": user.data["country_id"],
-            "city": user.data["city_id"],
-            "sex": user.data["sex"],
-            "age_from": user.data["age_from"],
-            "age_to": user.data["age_to"],
+            "country": user.country_id,
+            "city": user.city_id,
+            "sex": user.sex,
+            "age_from": user.age_from,
+            "age_to": user.age_to,
         }
 
         search_results = session.method(
@@ -441,13 +475,26 @@ class SelectAgeState(State):
         ]
 
         search_id = str(uuid.uuid4())
-        user.data.setdefault("searches", {})[search_id] = {
-            "datetime": datetime.datetime.utcnow().isoformat(),
-            "params": search_params,
-            "results": search_results,
-        }
-        user.data["current_search"] = search_id
-        user.data["current_search_item"] = 0
+        search = Search(
+            uuid=search_id,
+            user_id=event.user_id,
+            datetime=datetime.datetime.utcnow().isoformat(),
+            **search_params,
+        )
+        storage.save(search)
+
+        for person in search_results:
+            match = Match(
+                uuid=uuid.uuid4(),
+                search_id=search_id,
+                vk_id=person["id"],
+                first_name=person["first_name"],
+                last_name=person["last_name"],
+            )
+            storage.save(match)
+
+        user.current_search = search_id
+        user.current_search_item = 0
         return "list_matches"
 
 
@@ -461,28 +508,29 @@ class SelectAgeErrorState(SelectAgeState):
 class ListMatchesState(State):
     @classmethod
     def enter(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> None:
-        assert "searches" in user.data
-        assert "current_search" in user.data
-        assert "current_search_item" in user.data
+        assert user.current_search
+        assert user.current_search_item is not None
 
-        search_id = user.data["current_search"]
-        assert search_id in user.data["searches"]
+        search_id = user.current_search
 
-        search = user.data["searches"][search_id]
+        matches = storage.find(Match.type, lambda match: match.search_id == search_id)
 
-        results = search["results"]
+        item_index = user.current_search_item
+        assert 0 <= item_index < len(matches)
 
-        item_index = user.data["current_search_item"]
-        assert 0 <= item_index < len(results)
-
-        item = results[item_index]
+        match = matches[item_index]
 
         photos = session.method(
             "photos.get",
             values={
-                "owner_id": item["id"],
+                "owner_id": match.vk_id,
                 "album_id": "profile",
                 "count": 1000,
                 "extended": 1,
@@ -497,8 +545,8 @@ class ListMatchesState(State):
             group_session,
             event.user_id,
             (
-                f"{item_index+1}. {item['first_name']} {item['last_name']}: "
-                f"https://vk.com/id{item['id']}"
+                f"{item_index+1}. {match.first_name} {match.last_name}: "
+                f"https://vk.com/id{match.vk_id}"
             ),
             attachment=photos,
         )
@@ -515,37 +563,38 @@ class ListMatchesState(State):
 
     @classmethod
     def leave(
-        cls, user: User, session: VkApi, group_session: VkApi, event: Event
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
     ) -> str:
         if event.text == "Отмена":
-            del user.data["current_search"]
-            del user.data["current_search_item"]
+            user.current_search = None
+            user.current_search_item = None
             return "hello_again"
 
-        assert "searches" in user.data
-        assert "current_search" in user.data
-        assert "current_search_item" in user.data
+        assert user.current_search
+        assert user.current_search_item is not None
 
-        search_id = user.data["current_search"]
-        assert search_id in user.data["searches"]
+        search_id = user.current_search
 
-        search = user.data["searches"][search_id]
+        matches = storage.find(Match.type, lambda match: match.search_id == search_id)
 
-        results = search["results"]
+        item_index = user.current_search_item
+        assert 0 <= item_index < len(matches)
 
-        item_index = user.data["current_search_item"]
-        assert 0 <= item_index < len(results)
+        match = matches[item_index]
 
-        item = results[item_index]
-
-        item["seen"] = True
+        match.seen = True
 
         if event.text == "Да":
-            item["liked"] = True
+            match.liked = True
         else:
-            item["liked"] = False
+            match.liked = False
 
-        user.data["current_search_item"] += 1
+        user.current_search_item += 1
 
         return "list_matches"
 
