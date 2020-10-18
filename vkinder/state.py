@@ -1,4 +1,6 @@
 import abc
+import datetime
+import uuid
 from random import randrange
 
 from more_itertools import chunked
@@ -313,10 +315,10 @@ class SelectSexState(State):
 
         selected_sex: str
         if event.text == "Мужской":
-            user.data["sex"] = 1
+            user.data["sex"] = 2
             selected_sex = "мужчин"
         elif event.text == "Женский":
-            user.data["sex"] = 2
+            user.data["sex"] = 1
             selected_sex = "женщин"
         elif event.text == "Любой":
             user.data["sex"] = 0
@@ -406,6 +408,46 @@ class SelectAgeState(State):
                 "Начинаем поиск!"
             ),
         )
+
+        assert "country_id" in user.data
+        assert "city_id" in user.data
+        assert "sex" in user.data
+        assert "age_from" in user.data
+        assert "age_to" in user.data
+
+        search_params = {
+            "country": user.data["country_id"],
+            "city": user.data["city_id"],
+            "sex": user.data["sex"],
+            "age_from": user.data["age_from"],
+            "age_to": user.data["age_to"],
+        }
+
+        search_results = session.method(
+            "users.search",
+            {
+                "sort": 0,
+                "count": 1000,
+                "has_photo": 1,
+                "status": "6",
+                "fields": "id,verified,domain",
+                "can_access_closed": 1,
+                "is_closed": 0,
+                **search_params,
+            },
+        )["items"]
+        search_results = [
+            person for person in search_results if not person["is_closed"]
+        ]
+
+        search_id = str(uuid.uuid4())
+        user.data.setdefault("searches", {})[search_id] = {
+            "datetime": datetime.datetime.utcnow().isoformat(),
+            "params": search_params,
+            "results": search_results,
+        }
+        user.data["current_search"] = search_id
+        user.data["current_search_item"] = 0
         return "list_matches"
 
 
@@ -421,13 +463,91 @@ class ListMatchesState(State):
     def enter(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> None:
-        write_msg(group_session, event.user_id, "Поиск... (на самом деле нет)")
+        assert "searches" in user.data
+        assert "current_search" in user.data
+        assert "current_search_item" in user.data
+
+        search_id = user.data["current_search"]
+        assert search_id in user.data["searches"]
+
+        search = user.data["searches"][search_id]
+
+        results = search["results"]
+
+        item_index = user.data["current_search_item"]
+        assert 0 <= item_index < len(results)
+
+        item = results[item_index]
+
+        photos = session.method(
+            "photos.get",
+            values={
+                "owner_id": item["id"],
+                "album_id": "profile",
+                "count": 1000,
+                "extended": 1,
+                "photo_sizes": 1,
+                "type": "m",
+            },
+        )["items"]
+        photos = sorted(photos, key=lambda p: p["likes"]["count"], reverse=True)[:3]
+        photos = ",".join(f"photo{p['owner_id']}_{p['id']}" for p in photos)
+
+        write_msg(
+            group_session,
+            event.user_id,
+            (
+                f"{item_index+1}. {item['first_name']} {item['last_name']}: "
+                f"https://vk.com/id{item['id']}"
+            ),
+            attachment=photos,
+        )
+
+        keyboard = VkKeyboard(one_time=True)
+        keyboard.add_button("Да", color=VkKeyboardColor.POSITIVE)
+        keyboard.add_button("Нет", color=VkKeyboardColor.NEGATIVE)
+        keyboard.add_line()
+        keyboard.add_button("Отмена", color=VkKeyboardColor.NEGATIVE)
+
+        write_msg(
+            group_session, event.user_id, "Нравится?", keyboard=keyboard.get_keyboard()
+        )
 
     @classmethod
     def leave(
         cls, user: User, session: VkApi, group_session: VkApi, event: Event
     ) -> str:
-        return "hello_again"
+        if event.text == "Отмена":
+            del user.data["current_search"]
+            del user.data["current_search_item"]
+            return "hello_again"
+
+        assert "searches" in user.data
+        assert "current_search" in user.data
+        assert "current_search_item" in user.data
+
+        search_id = user.data["current_search"]
+        assert search_id in user.data["searches"]
+
+        search = user.data["searches"][search_id]
+
+        results = search["results"]
+
+        item_index = user.data["current_search_item"]
+        assert 0 <= item_index < len(results)
+
+        item = results[item_index]
+
+        item["seen"] = True
+
+        if event.text == "Да":
+            item["liked"] = True
+        else:
+            item["liked"] = False
+
+        user.data["current_search_item"] += 1
+
+        return "list_matches"
 
 
 states = {
