@@ -11,7 +11,7 @@ from vk_api.longpoll import Event
 from vkinder.models import Match, Search, User
 from vkinder.storage.base import BaseStorage
 
-INITIAL_STATE = "hello"
+INITIAL_STATE = "initial"
 TOTAL_STEPS = 4
 
 
@@ -50,6 +50,52 @@ class State(abc.ABC):
         event: Event,
     ) -> str:
         raise NotImplementedError()
+
+
+class InitialState(State):
+    @classmethod
+    def enter(
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
+    ) -> None:
+        pass
+
+    @classmethod
+    def leave(
+        cls,
+        storage: BaseStorage,
+        user: User,
+        session: VkApi,
+        group_session: VkApi,
+        event: Event,
+    ) -> str:
+        user_info = session.method(
+            "users.get", {"user_ids": event.user_id, "fields": "country,city"}
+        )[0]
+        first_name = user_info["first_name"]
+        last_name = user_info["last_name"]
+
+        try:
+            country_id = user_info["country"]["id"]
+        except KeyError:
+            country_id = None
+
+        try:
+            city_id = user_info["city"]["id"]
+        except KeyError:
+            city_id = None
+
+        user.first_name = first_name
+        user.last_name = last_name
+        user.country_id = country_id
+        user.city_id = city_id
+
+        storage.save(user)
+        return "hello"
 
 
 class HelloState(State):
@@ -606,6 +652,8 @@ class ListMatchesState(State):
 
 
 states = {
+    # новый пользователь
+    "initial": InitialState,
     # приветствие
     "hello": HelloState,
     "hello_error": HelloErrorState,

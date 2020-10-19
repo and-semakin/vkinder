@@ -22,38 +22,16 @@ def main():
         if not (event.type == VkEventType.MESSAGE_NEW and event.to_me):
             continue
 
+        # проверим, новый ли этот пользователь или нет
         try:
             user = storage.get(User, event.user_id)
         except ItemNotFoundInStorageError:
-            user_info = session.method(
-                "users.get", {"user_ids": event.user_id, "fields": "country,city"}
-            )[0]
-            first_name = user_info["first_name"]
-            last_name = user_info["last_name"]
-
-            try:
-                country_id = user_info["country"]["id"]
-            except KeyError:
-                country_id = None
-
-            try:
-                city_id = user_info["city"]["id"]
-            except KeyError:
-                city_id = None
-
+            # если новый, то создадим пустого с состоянием для инициализации
             user = User(
                 vk_id=event.user_id,
                 state=INITIAL_STATE,
-                first_name=first_name,
-                last_name=last_name,
-                country_id=country_id,
-                city_id=city_id,
             )
             storage.save(user)
-
-            states[user.state].enter(storage, user, session, group_session, event)
-            storage.persist()
-            continue
 
         if event.text == "/state":
             write_msg(
