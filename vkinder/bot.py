@@ -43,18 +43,12 @@ class Bot:
                         f"Ассоциированные данные: {user.__dict__}",
                     ),
                 )
-                states[user.state].enter(
-                    self.storage, user, self.session, self.group_session, event
-                )
+                states[user.state].enter(self, event)
                 continue
 
-            new_state = states[user.state].leave(
-                self.storage, user, self.session, self.group_session, event
-            )
+            new_state = states[user.state].leave(self, event)
             user.state = new_state
-            states[new_state].enter(
-                self.storage, user, self.session, self.group_session, event
-            )
+            states[new_state].enter(self, event)
             self.storage.persist()
 
         raise Exception("The previous loop should never exit!")

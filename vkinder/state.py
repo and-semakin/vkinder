@@ -2,6 +2,7 @@ import abc
 import datetime
 import uuid
 from random import randrange
+from typing import TYPE_CHECKING
 
 from more_itertools import chunked
 from vk_api import VkApi
@@ -9,7 +10,9 @@ from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import Event
 
 from vkinder.models import Match, Search, User
-from vkinder.storage.base import BaseStorage
+
+if TYPE_CHECKING:
+    from vkinder.bot import Bot
 
 INITIAL_STATE = "initial"
 TOTAL_STEPS = 4
@@ -29,51 +32,25 @@ def write_msg(session: VkApi, user_id, message, attachment=None, keyboard=None) 
 class State(abc.ABC):
     @classmethod
     @abc.abstractmethod
-    def enter(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> None:
+    def enter(cls, bot: "Bot", event: Event) -> None:
         raise NotImplementedError()
 
     @classmethod
     @abc.abstractmethod
-    def leave(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> str:
+    def leave(cls, bot: "Bot", event: Event) -> str:
         raise NotImplementedError()
 
 
 class InitialState(State):
     @classmethod
-    def enter(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> None:
+    def enter(cls, bot: "Bot", event: Event) -> None:
         pass
 
     @classmethod
-    def leave(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> str:
-        user_info = session.method(
+    def leave(cls, bot: "Bot", event: Event) -> str:
+        user = bot.storage.get(User, event.user_id)
+
+        user_info = bot.session.method(
             "users.get", {"user_ids": event.user_id, "fields": "country,city"}
         )[0]
         first_name = user_info["first_name"]
@@ -94,7 +71,7 @@ class InitialState(State):
         user.country_id = country_id
         user.city_id = city_id
 
-        storage.save(user)
+        bot.storage.save(user)
         return "hello"
 
 
@@ -108,33 +85,21 @@ class HelloState(State):
     )
 
     @classmethod
-    def enter(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> None:
+    def enter(cls, bot: "Bot", event: Event) -> None:
+        user = bot.storage.get(User, event.user_id)
+
         keyboard = VkKeyboard(one_time=True)
         keyboard.add_button("Новый поиск", color=VkKeyboardColor.PRIMARY)
 
         write_msg(
-            group_session,
+            bot.group_session,
             event.user_id,
             cls.text.format(first_name=user.first_name),
             keyboard=keyboard.get_keyboard(),
         )
 
     @classmethod
-    def leave(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> str:
+    def leave(cls, bot: "Bot", event: Event) -> str:
         if event.text == "Новый поиск":
             return "select_country"
         else:
@@ -165,21 +130,16 @@ class SelectCountryState(State):
     ) % (TOTAL_STEPS,)
 
     @classmethod
-    def enter(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> None:
+    def enter(cls, bot: "Bot", event: Event) -> None:
+        user = bot.storage.get(User, event.user_id)
+
         country_id = user.country_id
 
         keyboard = VkKeyboard(one_time=True)
 
         country_title = None
         if country_id:
-            country_title = session.method(
+            country_title = bot.session.method(
                 "database.getCountriesById", {"country_ids": country_id}
             )[0]["title"]
             keyboard.add_button(country_title, color=VkKeyboardColor.PRIMARY)
@@ -187,7 +147,7 @@ class SelectCountryState(State):
 
         country_titles = [
             country["title"]
-            for country in session.method("database.getCountries", {"count": 6})[
+            for country in bot.session.method("database.getCountries", {"count": 6})[
                 "items"
             ]
             if country["title"] != country_title
@@ -200,27 +160,22 @@ class SelectCountryState(State):
         keyboard.add_button("Отмена", color=VkKeyboardColor.NEGATIVE)
 
         write_msg(
-            group_session,
+            bot.group_session,
             event.user_id,
             cls.text,
             keyboard=keyboard.get_keyboard(),
         )
 
     @classmethod
-    def leave(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> str:
+    def leave(cls, bot: "Bot", event: Event) -> str:
         if event.text == "Отмена":
             return "hello_again"
 
+        user = bot.storage.get(User, event.user_id)
+
         country_title_query = event.text.lower()
 
-        countries = session.method(
+        countries = bot.session.method(
             "database.getCountries", {"need_all": 1, "count": 1000}
         )["items"]
 
@@ -235,8 +190,8 @@ class SelectCountryState(State):
             return "select_country_error"
 
         user.country_id = country_id
-        write_msg(group_session, event.user_id, f"Выбрана страна: {country_title}")
-        storage.save(user)
+        write_msg(bot.group_session, event.user_id, f"Выбрана страна: {country_title}")
+        bot.storage.save(user)
         return "select_city"
 
 
@@ -254,14 +209,9 @@ class SelectCityState(State):
     ) % (TOTAL_STEPS,)
 
     @classmethod
-    def enter(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> None:
+    def enter(cls, bot: "Bot", event: Event) -> None:
+        user = bot.storage.get(User, event.user_id)
+
         assert user.country_id
 
         country_id = user.country_id
@@ -271,7 +221,7 @@ class SelectCityState(State):
 
         city_title = None
         if city_id:
-            city_title = session.method(
+            city_title = bot.session.method(
                 "database.getCitiesById", {"city_ids": city_id}
             )[0]["title"]
             keyboard.add_button(city_title, color=VkKeyboardColor.PRIMARY)
@@ -279,7 +229,7 @@ class SelectCityState(State):
 
         city_titles = [
             city["title"]
-            for city in session.method(
+            for city in bot.session.method(
                 "database.getCities", {"country_id": country_id, "count": 6}
             )["items"]
             if city["title"] != city_title
@@ -293,29 +243,24 @@ class SelectCityState(State):
         keyboard.add_button("Отмена", color=VkKeyboardColor.NEGATIVE)
 
         write_msg(
-            group_session,
+            bot.group_session,
             event.user_id,
             cls.text,
             keyboard=keyboard.get_keyboard(),
         )
 
     @classmethod
-    def leave(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> str:
+    def leave(cls, bot: "Bot", event: Event) -> str:
         if event.text == "Отмена":
             return "hello_again"
         if event.text == "Назад":
             return "select_country"
 
+        user = bot.storage.get(User, event.user_id)
+
         country_id = user.country_id
 
-        found_cities = session.method(
+        found_cities = bot.session.method(
             "database.getCities",
             {"country_id": country_id, "q": event.text.lower(), "count": 1},
         )["items"]
@@ -328,8 +273,8 @@ class SelectCityState(State):
         city_id = city["id"]
 
         user.city_id = city_id
-        write_msg(group_session, event.user_id, f"Выбран город: {city_title}")
-        storage.save(user)
+        write_msg(bot.group_session, event.user_id, f"Выбран город: {city_title}")
+        bot.storage.save(user)
         return "select_sex"
 
 
@@ -348,14 +293,7 @@ class SelectSexState(State):
     ) % (TOTAL_STEPS,)
 
     @classmethod
-    def enter(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> None:
+    def enter(cls, bot: "Bot", event: Event) -> None:
         keyboard = VkKeyboard(one_time=True)
 
         keyboard.add_button("Мужской", color=VkKeyboardColor.PRIMARY)
@@ -368,22 +306,17 @@ class SelectSexState(State):
         keyboard.add_button("Отмена", color=VkKeyboardColor.NEGATIVE)
 
         write_msg(
-            group_session, event.user_id, cls.text, keyboard=keyboard.get_keyboard()
+            bot.group_session, event.user_id, cls.text, keyboard=keyboard.get_keyboard()
         )
 
     @classmethod
-    def leave(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> str:
+    def leave(cls, bot: "Bot", event: Event) -> str:
         if event.text == "Отмена":
             return "hello_again"
         if event.text == "Назад":
             return "select_city"
+
+        user = bot.storage.get(User, event.user_id)
 
         selected_sex: str
         if event.text == "Мужской":
@@ -399,9 +332,9 @@ class SelectSexState(State):
             return "select_sex_error"
 
         write_msg(
-            group_session, event.user_id, f"Отлично! Будем искать {selected_sex}!"
+            bot.group_session, event.user_id, f"Отлично! Будем искать {selected_sex}!"
         )
-        storage.save(user)
+        bot.storage.save(user)
         return "select_age"
 
 
@@ -422,14 +355,7 @@ class SelectAgeState(State):
     ) % (TOTAL_STEPS,)
 
     @classmethod
-    def enter(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> None:
+    def enter(cls, bot: "Bot", event: Event) -> None:
         keyboard = VkKeyboard(one_time=True)
 
         keyboard.add_button("16-20")
@@ -446,22 +372,17 @@ class SelectAgeState(State):
         keyboard.add_button("Отмена", color=VkKeyboardColor.NEGATIVE)
 
         write_msg(
-            group_session, event.user_id, cls.text, keyboard=keyboard.get_keyboard()
+            bot.group_session, event.user_id, cls.text, keyboard=keyboard.get_keyboard()
         )
 
     @classmethod
-    def leave(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> str:
+    def leave(cls, bot: "Bot", event: Event) -> str:
         if event.text == "Отмена":
             return "hello_again"
         if event.text == "Назад":
             return "select_sex"
+
+        user = bot.storage.get(User, event.user_id)
 
         msg: str = event.text.lower().strip()
 
@@ -484,7 +405,7 @@ class SelectAgeState(State):
         user.age_from = age_from
         user.age_to = age_to
         write_msg(
-            group_session,
+            bot.group_session,
             event.user_id,
             (
                 f"Выбран возрастной диапазон: {age_from}-{age_to} лет. "
@@ -506,7 +427,7 @@ class SelectAgeState(State):
             "age_to": user.age_to,
         }
 
-        search_results = session.method(
+        search_results = bot.session.method(
             "users.search",
             {
                 "sort": 0,
@@ -530,7 +451,7 @@ class SelectAgeState(State):
             datetime=datetime.datetime.utcnow().isoformat(),
             **search_params,
         )
-        storage.save(search)
+        bot.storage.save(search)
 
         for person in search_results:
             match = Match(
@@ -540,11 +461,11 @@ class SelectAgeState(State):
                 first_name=person["first_name"],
                 last_name=person["last_name"],
             )
-            storage.save(match)
+            bot.storage.save(match)
 
         user.current_search = search_id
         user.current_search_item = 0
-        storage.save(user)
+        bot.storage.save(user)
         return "list_matches"
 
 
@@ -557,27 +478,22 @@ class SelectAgeErrorState(SelectAgeState):
 
 class ListMatchesState(State):
     @classmethod
-    def enter(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> None:
+    def enter(cls, bot: "Bot", event: Event) -> None:
+        user = bot.storage.get(User, event.user_id)
+
         assert user.current_search
         assert user.current_search_item is not None
 
         search_id = user.current_search
 
-        matches = storage.find(Match, lambda match: match.search_id == search_id)
+        matches = bot.storage.find(Match, lambda match: match.search_id == search_id)
 
         item_index = user.current_search_item
         assert 0 <= item_index < len(matches)
 
         match = matches[item_index]
 
-        photos = session.method(
+        photos = bot.session.method(
             "photos.get",
             values={
                 "owner_id": match.vk_id,
@@ -592,7 +508,7 @@ class ListMatchesState(State):
         photos = ",".join(f"photo{p['owner_id']}_{p['id']}" for p in photos)
 
         write_msg(
-            group_session,
+            bot.group_session,
             event.user_id,
             (
                 f"{item_index+1}. {match.first_name} {match.last_name}: "
@@ -608,22 +524,20 @@ class ListMatchesState(State):
         keyboard.add_button("Отмена", color=VkKeyboardColor.NEGATIVE)
 
         write_msg(
-            group_session, event.user_id, "Нравится?", keyboard=keyboard.get_keyboard()
+            bot.group_session,
+            event.user_id,
+            "Нравится?",
+            keyboard=keyboard.get_keyboard(),
         )
 
     @classmethod
-    def leave(
-        cls,
-        storage: BaseStorage,
-        user: User,
-        session: VkApi,
-        group_session: VkApi,
-        event: Event,
-    ) -> str:
+    def leave(cls, bot: "Bot", event: Event) -> str:
+        user = bot.storage.get(User, event.user_id)
+
         if event.text == "Отмена":
             user.current_search = None
             user.current_search_item = None
-            storage.save(user)
+            bot.storage.save(user)
             return "hello_again"
 
         assert user.current_search
@@ -631,7 +545,7 @@ class ListMatchesState(State):
 
         search_id = user.current_search
 
-        matches = storage.find(Match, lambda match: match.search_id == search_id)
+        matches = bot.storage.find(Match, lambda match: match.search_id == search_id)
 
         item_index = user.current_search_item
         assert 0 <= item_index < len(matches)
@@ -647,7 +561,7 @@ class ListMatchesState(State):
 
         user.current_search_item += 1
 
-        storage.save(user)
+        bot.storage.save(user)
         return "list_matches"
 
 
