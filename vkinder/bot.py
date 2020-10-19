@@ -6,8 +6,9 @@ import vk_api
 from vk_api.longpoll import VkEventType, VkLongPoll
 
 from vkinder.config import Config
+from vkinder.helpers import write_msg
 from vkinder.models import User
-from vkinder.state import INITIAL_STATE, states, write_msg
+from vkinder.state import StateName, states
 from vkinder.storage.base import BaseStorage, ItemNotFoundInStorageError
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class Bot:
                 # если новый, то создадим пустого с состоянием для инициализации
                 user = User(
                     vk_id=event.user_id,
-                    state=INITIAL_STATE,
+                    state=StateName.INITIAL,
                 )
                 self.storage.save(user)
 
@@ -53,13 +54,13 @@ class Bot:
                     event.user_id,
                     (
                         f"Пользователь находится в состоянии {user.state}. "
-                        f"Ассоциированные данные: {user.__dict__}",
+                        f"Ассоциированные данные: {user.__dict__}"
                     ),
                 )
                 states[user.state].enter(self, event)
                 continue
 
-            new_state = states[user.state].leave(self, event)
+            new_state = states[user.state].leave(self, event).value.key
             user.state = new_state
             states[new_state].enter(self, event)
             self.storage.persist()
