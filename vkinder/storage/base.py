@@ -38,3 +38,7 @@ class BaseStorage(abc.ABC):
     @abc.abstractmethod
     def find(self, type: Type[T], where: Callable[[T], bool]) -> List[T]:
         raise NotImplementedError()
+
+    @abc.abstractmethod
+    def persist(self) -> None:
+        raise NotImplementedError()

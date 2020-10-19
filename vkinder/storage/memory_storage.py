@@ -36,6 +36,9 @@ class MemoryStorage(BaseStorage):
         matching = [item for item in table.values() if where(item)]
         return matching
 
+    def persist(self) -> None:
+        pass
+
 
 class PersistentStorage(MemoryStorage):
     def __init__(self, file: Union[os.PathLike, str]) -> None:
