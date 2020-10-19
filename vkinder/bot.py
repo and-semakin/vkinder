@@ -1,3 +1,5 @@
+import logging
+from itertools import cycle
 from typing import NoReturn
 
 import vk_api
@@ -8,15 +10,26 @@ from vkinder.models import User
 from vkinder.state import INITIAL_STATE, states, write_msg
 from vkinder.storage.base import BaseStorage, ItemNotFoundInStorageError
 
+logger = logging.getLogger(__name__)
+
 
 class Bot:
     def __init__(self, config: Config, storage: BaseStorage) -> None:
         self.storage = storage
 
-        self.session = vk_api.VkApi(token=config.vk_user_token)
+        tokens = config.vk_user_tokens.split(",")
+        logger.debug("Found %s access tokens!", len(tokens))
+        self._sessions = [vk_api.VkApi(token=token) for token in tokens]
+        # будем использовать все сессии по очереди, чтобы обойти ограничение
+        # на 3 запроса в секунду. а вдруг случится хайлоад?
+        self.sessions = cycle(self._sessions)
 
         self.group_session = vk_api.VkApi(token=config.vk_group_token)
         self.longpoll = VkLongPoll(self.group_session, config.vk_group_id)
+
+    @property
+    def session(self) -> vk_api.VkApi:
+        return next(self.sessions)
 
     def run(self) -> NoReturn:
         for event in self.longpoll.listen():
